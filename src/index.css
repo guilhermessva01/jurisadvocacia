@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 25% 96%;
+    --foreground: 20 20% 15%;
+
+    --card: 40 30% 97%;
+    --card-foreground: 20 20% 15%;
+
+    --popover: 40 30% 97%;
+    --popover-foreground: 20 20% 15%;
+
+    --primary: 0 45% 25%;
+    --primary-foreground: 40 40% 95%;
+
+    --secondary: 35 30% 88%;
+    --secondary-foreground: 20 20% 15%;
+
+    --muted: 35 20% 90%;
+    --muted-foreground: 20 10% 45%;
+
+    --accent: 35 55% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 30 20% 85%;
+    --input: 30 20% 85%;
+    --ring: 0 45% 25%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 0 45% 18%;
+    --sidebar-foreground: 40 30% 90%;
+    --sidebar-primary: 35 55% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 40% 25%;
+    --sidebar-accent-foreground: 40 30% 90%;
+    --sidebar-border: 0 35% 28%;
+    --sidebar-ring: 35 55% 55%;
+
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  .dark {
+    --background: 0 45% 8%;
+    --foreground: 40 30% 95%;
+    --card: 0 40% 12%;
+    --card-foreground: 40 30% 95%;
+    --popover: 0 40% 12%;
+    --popover-foreground: 40 30% 95%;
+    --primary: 35 55% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 35% 20%;
+    --secondary-foreground: 40 30% 95%;
+    --muted: 0 30% 18%;
+    --muted-foreground: 30 15% 60%;
+    --accent: 35 55% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 40 30% 95%;
+    --border: 0 30% 22%;
+    --input: 0 30% 22%;
+    --ring: 35 55% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer utilities {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  [role="tablist"] {
+    touch-action: pan-x;
+  }
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  [data-radix-popper-content-wrapper] {
+    z-index: 50 !important;
+  }
+  [role="dialog"] {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+}
+
+@layer components {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+  }
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border rounded-lg shadow-sm;
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
