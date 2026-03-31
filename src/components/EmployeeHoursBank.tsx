@@ -127,11 +127,27 @@ export function EmployeeHoursBank() {
         continue;
       }
 
-      const entrada = recs.find(r => r.type === "entrada");
-      const saidas = recs.filter(r => r.type === "saida");
-      const saida = saidas.length > 0 ? saidas[saidas.length - 1] : null;
+     const workedMinutes = calculateWorkedMinutes(recs);
 
-      if (entrada && saida) {
+if (workedMinutes > 0) {
+  totalMin += workedMinutes;
+  worked++;
+
+  const wH = Math.round((workedMinutes / 60) * 100) / 100;
+  const eHours = Math.round((expMin / 60) * 100) / 100;
+  const hadLate = recs.some(r => r.is_late);
+
+  if (hadLate) late++;
+
+  details.push({
+    date: dateStr,
+    hoursWorked: wH,
+    expectedHours: eHours,
+    overtime: wH > eHours ? Math.round((wH - eHours) * 100) / 100 : 0,
+    missing: wH < eHours ? Math.round((eHours - wH) * 100) / 100 : 0,
+    isLate: hadLate,
+  });
+}
         const [eH, eM, eS] = entrada.time.split(":").map(Number);
         const [sH, sM, sS] = saida.time.split(":").map(Number);
         const wMin = Math.max(0, ((sH * 3600 + (sM || 0) * 60 + (sS || 0)) - (eH * 3600 + (eM || 0) * 60 + (eS || 0))) / 60);
