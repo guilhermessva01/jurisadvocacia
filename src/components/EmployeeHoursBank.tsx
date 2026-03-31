@@ -278,5 +278,3 @@ if (workedMinutes > 0) {
         </CardContent>
       </Card>
     </div>
-  
-
