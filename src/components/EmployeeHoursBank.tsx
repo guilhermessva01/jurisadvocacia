@@ -182,7 +182,6 @@ if (workedMinutes > 0) {
     const hours = Math.floor(h);
     const mins = Math.round((h - hours) * 60);
     return `${hours}h${mins > 0 ? `${String(mins).padStart(2, "0")}min` : ""}`;
-  };
 
   return (
     <div className="space-y-4">
