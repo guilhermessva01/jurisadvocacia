@@ -10,6 +10,38 @@ import { toast } from "sonner";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
+const calculateWorkedMinutes = (records: { type: string; time: string }[]) => {
+  let totalMinutes = 0;
+  let lastEntry: string | null = null;
+
+  const sorted = [...records].sort((a, b) =>
+    a.time.localeCompare(b.time)
+  );
+
+  for (const record of sorted) {
+    if (record.type === "entrada") {
+      lastEntry = record.time;
+    }
+
+    if (record.type === "saida" && lastEntry) {
+      const [eH, eM, eS] = lastEntry.split(":").map(Number);
+      const [sH, sM, sS] = record.time.split(":").map(Number);
+
+      const entrySec =
+        eH * 3600 + (eM || 0) * 60 + (eS || 0);
+
+      const exitSec =
+        sH * 3600 + (sM || 0) * 60 + (sS || 0);
+
+      totalMinutes += Math.max(0, (exitSec - entrySec) / 60);
+
+      lastEntry = null;
+    }
+  }
+
+  return totalMinutes;
+};
+
 interface DayDetail {
   date: string;
   hoursWorked: number;
@@ -139,7 +171,37 @@ export function AdminHoursBank() {
           }
 
           // Calculate worked hours
-          const entrada = recs.find(r => r.type === "entrada");
+          const workedMinutes = calculateWorkedMinutes(recs);
+
+if (workedMinutes > 0) {
+  totalMinutes += workedMinutes;
+  daysWorked++;
+
+  const workedHours =
+    Math.round((workedMinutes / 60) * 100) / 100;
+
+  const expectedHours =
+    Math.round((expectedDayMinutes / 60) * 100) / 100;
+
+  const hadLate = recs.some(r => r.is_late);
+
+  if (hadLate) daysLate++;
+
+  dailyDetails.push({
+    date: dateStr,
+    hoursWorked: workedHours,
+    expectedHours: expectedHours,
+    overtime:
+      workedHours > expectedHours
+        ? Math.round((workedHours - expectedHours) * 100) / 100
+        : 0,
+    missing:
+      workedHours < expectedHours
+        ? Math.round((expectedHours - workedHours) * 100) / 100
+        : 0,
+    isLate: hadLate,
+  });
+}
           const saidas = recs.filter(r => r.type === "saida");
           const saida = saidas.length > 0 ? saidas[saidas.length - 1] : null;
 
