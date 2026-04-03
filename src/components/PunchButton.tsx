@@ -141,8 +141,8 @@ export function PunchButton({ onSuccess }: { onSuccess?: () => void }) {
     setLoading(false);
   };
 
-  const checkScheduleStatus = async (): Promise<{ withinSchedule: boolean; isLate: boolean; lateMinutes: number }> => {
-    if (!user) return { withinSchedule: false, isLate: false, lateMinutes: 0 };
+  const checkScheduleStatus = async (): Promise<{ withinSchedule: boolean; isLate: boolean; lateMinutes: number; statusLabel: string }> => {
+    if (!user) return { withinSchedule: false, isLate: false, lateMinutes: 0, statusLabel: "Fora do horário" };
 
     const now = getBrasiliaDate();
     const dayOfWeek = now.getDay();
@@ -156,13 +156,8 @@ export function PunchButton({ onSuccess }: { onSuccess?: () => void }) {
       .eq("is_active", true);
 
     if (!schedules || schedules.length === 0) {
-      return { withinSchedule: true, isLate: false, lateMinutes: 0 };
+      return { withinSchedule: true, isLate: false, lateMinutes: 0, statusLabel: "No horário" };
     }
-
-    // Check if current time falls within ANY configured shift
-    let withinSchedule = false;
-    let isLate = false;
-    let lateMinutes = 0;
 
     for (const schedule of schedules) {
       const [sh, sm] = schedule.start_time.split(":").map(Number);
@@ -170,20 +165,38 @@ export function PunchButton({ onSuccess }: { onSuccess?: () => void }) {
       const startMin = sh * 60 + sm;
       const endMin = eh * 60 + em;
 
-      // Within this shift (with 5min grace after end)
-      if (currentMinutes >= startMin && currentMinutes <= endMin + 5) {
-        withinSchedule = true;
-
-        // Check late for entrada
-        if (type === "entrada" && currentMinutes > startMin) {
-          isLate = true;
-          lateMinutes = currentMinutes - startMin;
+      if (type === "entrada") {
+        // Before shift start → Antecipado
+        if (currentMinutes < startMin) {
+          return { withinSchedule: false, isLate: false, lateMinutes: 0, statusLabel: "Antecipado" };
         }
-        break;
+        // Within tolerance (start to start+5) → No horário
+        if (currentMinutes >= startMin && currentMinutes <= startMin + 5) {
+          return { withinSchedule: true, isLate: false, lateMinutes: 0, statusLabel: "No horário" };
+        }
+        // After tolerance but within shift → Atrasado
+        if (currentMinutes > startMin + 5 && currentMinutes <= endMin) {
+          return { withinSchedule: true, isLate: true, lateMinutes: currentMinutes - startMin, statusLabel: "Atrasado" };
+        }
+      }
+
+      if (type === "saida") {
+        // Within shift time → No horário
+        if (currentMinutes >= startMin && currentMinutes <= endMin + 5) {
+          return { withinSchedule: true, isLate: false, lateMinutes: 0, statusLabel: "No horário" };
+        }
+        // After shift end + tolerance → Saída tardia
+        if (currentMinutes > endMin + 5) {
+          return { withinSchedule: true, isLate: false, lateMinutes: 0, statusLabel: "Saída tardia" };
+        }
+        // Before shift start → Antecipado
+        if (currentMinutes < startMin) {
+          return { withinSchedule: false, isLate: false, lateMinutes: 0, statusLabel: "Antecipado" };
+        }
       }
     }
 
-    return { withinSchedule, isLate, lateMinutes };
+    return { withinSchedule: false, isLate: false, lateMinutes: 0, statusLabel: "Fora do horário" };
   };
 
   const saveRecord = async (
@@ -192,18 +205,29 @@ export function PunchButton({ onSuccess }: { onSuccess?: () => void }) {
     address: string,
     locationStatus: string,
     reason: string | null,
-    scheduleStatus?: { withinSchedule: boolean; isLate: boolean; lateMinutes: number }
+    scheduleStatus?: { withinSchedule: boolean; isLate: boolean; lateMinutes: number; statusLabel: string }
   ) => {
     if (!user) return;
 
     const status = scheduleStatus || await checkScheduleStatus();
 
     let effectiveReason = reason;
-    if (!status.withinSchedule) {
-      effectiveReason = reason ? `${reason} (fora do horário)` : "Fora do horário de trabalho";
-      toast.info("⚠️ Registro FORA do horário de trabalho programado.", { duration: 5000 });
+    const label = status.statusLabel;
+
+    if (label === "No horário") {
+      toast.success("✅ Registro NO HORÁRIO de trabalho.", { duration: 3000 });
+    } else if (label === "Antecipado") {
+      effectiveReason = reason ? `${reason} (antecipado)` : "Registro antecipado";
+      toast.info("⏰ Registro ANTECIPADO — antes do horário do turno.", { duration: 5000 });
+    } else if (label === "Atrasado") {
+      effectiveReason = reason ? `${reason} (atraso: ${status.lateMinutes}min)` : `Atraso de ${status.lateMinutes} minutos`;
+      toast.warning("⚠️ Registro com ATRASO.", { duration: 5000 });
+    } else if (label === "Saída tardia") {
+      effectiveReason = reason ? `${reason} (saída tardia)` : "Saída após o horário do turno";
+      toast.info("🕐 Registro de SAÍDA TARDIA — após o horário do turno.", { duration: 5000 });
     } else {
-      toast.info("✅ Registro DENTRO do horário de trabalho.", { duration: 3000 });
+      effectiveReason = reason ? `${reason} (fora do horário)` : "Fora do horário de trabalho";
+      toast.info("⚠️ Registro FORA do horário de trabalho.", { duration: 5000 });
     }
 
     const currentType = type;

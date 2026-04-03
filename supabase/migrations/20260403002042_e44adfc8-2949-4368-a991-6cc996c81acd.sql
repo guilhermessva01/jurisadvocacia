@@ -1,0 +1,1 @@
+ALTER TABLE public.work_schedules DROP CONSTRAINT IF EXISTS work_schedules_user_id_day_of_week_key;

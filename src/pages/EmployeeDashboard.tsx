@@ -214,6 +214,9 @@ export default function EmployeeDashboard() {
             </Card>
           </div>
         )}
+        <footer className="text-center py-4">
+          <p className="text-[10px] text-muted-foreground/70">Desenvolvido por Eng. Guilherme dos Santos</p>
+        </footer>
       </main>
 
       {/* Mobile bottom navigation */}

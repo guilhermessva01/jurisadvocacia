@@ -8,38 +8,6 @@ import { Clock, TrendingUp, TrendingDown, CalendarDays, CalendarX } from "lucide
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-const calculateWorkedMinutes = (records: { type: string; time: string }[]) => {
-  let totalMinutes = 0;
-  let lastEntry: string | null = null;
-
-  const sorted = [...records].sort((a, b) =>
-    a.time.localeCompare(b.time)
-  );
-
-  for (const record of sorted) {
-    if (record.type === "entrada") {
-      lastEntry = record.time;
-    }
-
-    if (record.type === "saida" && lastEntry) {
-      const [eH, eM, eS] = lastEntry.split(":").map(Number);
-      const [sH, sM, sS] = record.time.split(":").map(Number);
-
-      const entrySec =
-        eH * 3600 + (eM || 0) * 60 + (eS || 0);
-
-      const exitSec =
-        sH * 3600 + (sM || 0) * 60 + (sS || 0);
-
-      totalMinutes += Math.max(0, (exitSec - entrySec) / 60);
-
-      lastEntry = null;
-    }
-  }
-
-  return totalMinutes;
-};
-
 interface DayDetail {
   date: string;
   hoursWorked: number;
@@ -47,6 +15,37 @@ interface DayDetail {
   overtime: number;
   missing: number;
   isLate: boolean;
+  invalidDay: boolean;
+}
+
+function calculateWorkedMinutes(recs: { type: string; time: string; location_status?: string | null }[]): { minutes: number; valid: boolean } {
+  if (recs.some(r => r.location_status === "auto")) {
+    return { minutes: 0, valid: false };
+  }
+
+  let totalMinutes = 0;
+  let i = 0;
+  const sorted = [...recs];
+
+  while (i < sorted.length) {
+    while (i < sorted.length && sorted[i].type !== "entrada") i++;
+    if (i >= sorted.length) break;
+    const entrada = sorted[i];
+    i++;
+
+    while (i < sorted.length && sorted[i].type !== "saida") i++;
+    if (i >= sorted.length) break;
+    const saida = sorted[i];
+    i++;
+
+    const [eH, eM, eS] = entrada.time.split(":").map(Number);
+    const [sH, sM, sS] = saida.time.split(":").map(Number);
+    const startSec = eH * 3600 + (eM || 0) * 60 + (eS || 0);
+    const endSec = sH * 3600 + (sM || 0) * 60 + (sS || 0);
+    totalMinutes += Math.max(0, (endSec - startSec) / 60);
+  }
+
+  return { minutes: totalMinutes, valid: true };
 }
 
 export function EmployeeHoursBank() {
@@ -55,7 +54,7 @@ export function EmployeeHoursBank() {
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [dailyDetails, setDailyDetails] = useState<DayDetail[]>([]);
   const [summary, setSummary] = useState({ totalHours: 0, expectedHours: 0, overtime: 0, missing: 0, daysWorked: 0, daysAbsent: 0, daysLate: 0 });
-  const [cycleStart, setCycleStart] = useState("2026-03-30");
+  const [cycleStart, setCycleStart] = useState("2026-03-31");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -82,24 +81,32 @@ export function EmployeeHoursBank() {
     const endDate = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
     const effectiveStart = startDate > cycleStart ? startDate : cycleStart;
 
-    const { data: records } = await supabase
-      .from("time_records")
-      .select("record_date, record_time, record_type, is_late")
-      .eq("user_id", user.id)
-      .gte("record_date", effectiveStart)
-      .lt("record_date", endDate)
-      .order("created_at", { ascending: true });
+    const [{ data: records }, { data: schedules }, { data: holidaysData }] = await Promise.all([
+      supabase
+        .from("time_records")
+        .select("record_date, record_time, record_type, is_late, location_status")
+        .eq("user_id", user.id)
+        .gte("record_date", effectiveStart)
+        .lt("record_date", endDate)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("work_schedules")
+        .select("day_of_week, start_time, end_time, is_active")
+        .eq("user_id", user.id)
+        .eq("is_active", true),
+      supabase
+        .from("holidays")
+        .select("date")
+        .gte("date", startDate)
+        .lt("date", endDate),
+    ]);
 
-    const { data: schedules } = await supabase
-      .from("work_schedules")
-      .select("day_of_week, start_time, end_time, break_minutes, is_active")
-      .eq("user_id", user.id)
-      .eq("is_active", true);
+    const holidayDates = new Set((holidaysData || []).map(h => h.date));
 
-    const dayRecords: Record<string, { type: string; time: string; is_late: boolean | null }[]> = {};
+    const dayRecords: Record<string, { type: string; time: string; is_late: boolean | null; location_status: string | null }[]> = {};
     for (const r of records || []) {
       if (!dayRecords[r.record_date]) dayRecords[r.record_date] = [];
-      dayRecords[r.record_date].push({ type: r.record_type, time: r.record_time, is_late: r.is_late });
+      dayRecords[r.record_date].push({ type: r.record_type, time: r.record_time, is_late: r.is_late, location_status: r.location_status });
     }
 
     const details: DayDetail[] = [];
@@ -109,61 +116,61 @@ export function EmployeeHoursBank() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dateStr < cycleStart || dateStr > today) continue;
+      if (dateStr < cycleStart || dateStr >= today) continue;
 
       const date = new Date(year, month - 1, d);
-      const sched = schedules?.find(s => s.day_of_week === date.getDay());
-      if (!sched) continue;
 
-      const [sh, sm] = sched.start_time.split(":").map(Number);
-      const [eh, em] = sched.end_time.split(":").map(Number);
-      const expMin = (eh * 60 + em) - (sh * 60 + sm) - (sched.break_minutes || 0);
+      // Skip holidays/days off
+      if (holidayDates.has(dateStr)) continue;
+
+      const daySchedules = schedules?.filter(s => s.day_of_week === date.getDay()) || [];
+      if (daySchedules.length === 0) continue;
+
+      let expMin = 0;
+      for (const sched of daySchedules) {
+        const [sh, sm] = sched.start_time.split(":").map(Number);
+        const [eh, em] = sched.end_time.split(":").map(Number);
+        expMin += (eh * 60 + em) - (sh * 60 + sm);
+      }
       totalExpMin += expMin;
 
       const recs = dayRecords[dateStr];
       if (!recs || recs.length === 0) {
         absent++;
-        details.push({ date: dateStr, hoursWorked: 0, expectedHours: Math.round((expMin / 60) * 100) / 100, overtime: 0, missing: Math.round((expMin / 60) * 100) / 100, isLate: false });
+        details.push({ date: dateStr, hoursWorked: 0, expectedHours: Math.round((expMin / 60) * 100) / 100, overtime: 0, missing: Math.round((expMin / 60) * 100) / 100, isLate: false, invalidDay: false });
         continue;
       }
 
-     const workedMinutes = calculateWorkedMinutes(recs);
+      const { minutes: workedMinutes, valid } = calculateWorkedMinutes(recs);
 
-if (workedMinutes > 0) {
-  totalMin += workedMinutes;
-  worked++;
-
-  const wH = Math.round((workedMinutes / 60) * 100) / 100;
-  const eHours = Math.round((expMin / 60) * 100) / 100;
-  const hadLate = recs.some(r => r.is_late);
-
-  if (hadLate) late++;
-
-  details.push({
-    date: dateStr,
-    hoursWorked: wH,
-    expectedHours: eHours,
-    overtime: wH > eHours ? Math.round((wH - eHours) * 100) / 100 : 0,
-    missing: wH < eHours ? Math.round((eHours - wH) * 100) / 100 : 0,
-    isLate: hadLate,
-  });
-}
-        const [eH, eM, eS] = entrada.time.split(":").map(Number);
-        const [sH, sM, sS] = saida.time.split(":").map(Number);
-        const wMin = Math.max(0, ((sH * 3600 + (sM || 0) * 60 + (sS || 0)) - (eH * 3600 + (eM || 0) * 60 + (eS || 0))) / 60);
-        totalMin += wMin;
-        worked++;
-        const wH = Math.round((wMin / 60) * 100) / 100;
-        const eHours = Math.round((expMin / 60) * 100) / 100;
-        const hadLate = recs.some(r => r.is_late);
-        if (hadLate) late++;
-        details.push({
-          date: dateStr, hoursWorked: wH, expectedHours: eHours,
-          overtime: wH > eHours ? Math.round((wH - eHours) * 100) / 100 : 0,
-          missing: wH < eHours ? Math.round((eHours - wH) * 100) / 100 : 0,
-          isLate: hadLate,
-        });
+      if (!valid) {
+        absent++;
+        details.push({ date: dateStr, hoursWorked: 0, expectedHours: Math.round((expMin / 60) * 100) / 100, overtime: 0, missing: Math.round((expMin / 60) * 100) / 100, isLate: false, invalidDay: true });
+        continue;
       }
+
+      const entradas = recs.filter(r => r.type === "entrada").length;
+      const saidas = recs.filter(r => r.type === "saida").length;
+      const completePairs = Math.min(entradas, saidas);
+
+      if (daySchedules.length > 1 && completePairs < daySchedules.length) {
+        absent++;
+        details.push({ date: dateStr, hoursWorked: 0, expectedHours: Math.round((expMin / 60) * 100) / 100, overtime: 0, missing: Math.round((expMin / 60) * 100) / 100, isLate: false, invalidDay: true });
+        continue;
+      }
+
+      totalMin += workedMinutes;
+      worked++;
+      const wH = Math.round((workedMinutes / 60) * 100) / 100;
+      const eHours = Math.round((expMin / 60) * 100) / 100;
+      const hadLate = recs.some(r => r.is_late);
+      if (hadLate) late++;
+      details.push({
+        date: dateStr, hoursWorked: wH, expectedHours: eHours,
+        overtime: wH > eHours ? Math.round((wH - eHours) * 100) / 100 : 0,
+        missing: wH < eHours ? Math.round((eHours - wH) * 100) / 100 : 0,
+        isLate: hadLate, invalidDay: false,
+      });
     }
 
     const tH = Math.round((totalMin / 60) * 100) / 100;
@@ -182,6 +189,7 @@ if (workedMinutes > 0) {
     const hours = Math.floor(h);
     const mins = Math.round((h - hours) * 60);
     return `${hours}h${mins > 0 ? `${String(mins).padStart(2, "0")}min` : ""}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -238,18 +246,21 @@ if (workedMinutes > 0) {
             <p className="text-center text-sm text-muted-foreground py-4">Nenhum registro encontrado.</p>
           ) : (
             <div className="space-y-1.5">
-              <div className="grid grid-cols-5 gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-2 pb-1">
+              <div className="grid grid-cols-6 gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-2 pb-1">
                 <span>Data</span>
                 <span className="text-center">Trabalhadas</span>
                 <span className="text-center">Esperadas</span>
                 <span className="text-center">Extras</span>
                 <span className="text-center">Faltantes</span>
+                <span className="text-center">Status</span>
               </div>
               {dailyDetails.map((day) => (
                 <div
                   key={day.date}
-                  className={`grid grid-cols-5 gap-2 items-center px-2 py-1.5 rounded text-xs ${
-                    day.hoursWorked === 0 && day.missing > 0
+                  className={`grid grid-cols-6 gap-2 items-center px-2 py-1.5 rounded text-xs ${
+                    day.invalidDay
+                      ? "bg-orange-50 dark:bg-orange-950/10"
+                      : day.hoursWorked === 0 && day.missing > 0
                       ? "bg-red-50 dark:bg-red-950/10"
                       : day.isLate
                       ? "bg-amber-50 dark:bg-amber-950/10"
@@ -258,11 +269,7 @@ if (workedMinutes > 0) {
                       : "bg-muted/30"
                   }`}
                 >
-                  <span className="font-medium flex items-center gap-1">
-                    {formatDate(day.date)}
-                    {day.isLate && <Badge variant="outline" className="text-[8px] px-1 py-0 text-amber-600 border-amber-300">Atraso</Badge>}
-                    {day.hoursWorked === 0 && day.missing > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-destructive border-destructive/30">Ausente</Badge>}
-                  </span>
+                  <span className="font-medium">{formatDate(day.date)}</span>
                   <span className="text-center font-mono">{formatHours(day.hoursWorked)}</span>
                   <span className="text-center font-mono text-muted-foreground">{formatHours(day.expectedHours)}</span>
                   <span className={`text-center font-mono ${day.overtime > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
@@ -270,6 +277,12 @@ if (workedMinutes > 0) {
                   </span>
                   <span className={`text-center font-mono ${day.missing > 0 ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
                     {day.missing > 0 ? `-${formatHours(day.missing)}` : "—"}
+                  </span>
+                  <span className="text-center">
+                    {day.invalidDay && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">Inválido</Badge>}
+                    {day.isLate && <Badge variant="outline" className="text-[8px] px-1 py-0 text-amber-600 border-amber-300">Atraso</Badge>}
+                    {!day.invalidDay && day.hoursWorked === 0 && day.missing > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-destructive border-destructive/30">Ausente</Badge>}
+                    {!day.invalidDay && day.hoursWorked > 0 && !day.isLate && <Badge variant="outline" className="text-[8px] px-1 py-0 text-green-600 border-green-300">OK</Badge>}
                   </span>
                 </div>
               ))}

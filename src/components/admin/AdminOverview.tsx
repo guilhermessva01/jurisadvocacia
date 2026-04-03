@@ -22,37 +22,6 @@ interface MonthlyStats {
   totalAbsentDays: number;
   totalWorkDays: number;
 }
-const calculateWorkedMinutes = (records: { type: string; time: string }[]) => {
-  let totalMinutes = 0;
-  let lastEntry: string | null = null;
-
-  const sorted = [...records].sort((a, b) =>
-    a.time.localeCompare(b.time)
-  );
-
-  for (const record of sorted) {
-    if (record.type === "entrada") {
-      lastEntry = record.time;
-    }
-
-    if (record.type === "saida" && lastEntry) {
-      const [eH, eM, eS] = lastEntry.split(":").map(Number);
-      const [sH, sM, sS] = record.time.split(":").map(Number);
-
-      const entrySec =
-        eH * 3600 + (eM || 0) * 60 + (eS || 0);
-
-      const exitSec =
-        sH * 3600 + (sM || 0) * 60 + (sS || 0);
-
-      totalMinutes += Math.max(0, (exitSec - entrySec) / 60);
-
-      lastEntry = null;
-    }
-  }
-
-  return totalMinutes;
-};
 
 export function AdminOverview() {
   const [active, setActive] = useState<ActiveEmployee[]>([]);
@@ -127,10 +96,7 @@ export function AdminOverview() {
 
     const hours: typeof todayHours = [];
     for (const [uid, recs] of Object.entries(userRecords)) {
-      const workedMinutes = calculateWorkedMinutes(recs);
-
-const workedHours =
-  Math.round((workedMinutes / 60) * 100) / 100;
+      const entrada = recs.find(r => r.type === "entrada");
       const saidas = recs.filter(r => r.type === "saida");
       const saida = saidas.length > 0 ? saidas[saidas.length - 1] : null;
 
@@ -147,14 +113,11 @@ const workedHours =
         const startSec = eh * 3600 + (em || 0) * 60 + (es || 0);
         let workedSec = endSec - startSec;
 
-       const workedMinutes = calculateWorkedMinutes(recs);
-const workedHours = Math.round((workedMinutes / 60) * 100) / 100;
-
-hours.push({
-  user_id: uid,
-  full_name: profileMap[uid] || "—",
-  hours: Math.max(0, workedHours),
-});
+        hours.push({
+          user_id: uid,
+          full_name: profileMap[uid] || "—",
+          hours: Math.max(0, Math.round((workedSec / 3600) * 100) / 100),
+        });
       }
     }
     setTodayHours(hours);
@@ -172,7 +135,7 @@ hours.push({
       .limit(1)
       .maybeSingle();
 
-    const cycleStart = officeData?.cycle_start_date || "2026-03-30";
+    const cycleStart = officeData?.cycle_start_date || "2026-03-31";
 
     const { data: bankData } = await supabase
       .from("monthly_hours_bank")

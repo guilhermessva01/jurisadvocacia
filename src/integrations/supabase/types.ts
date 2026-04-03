@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      holidays: {
+        Row: {
+          created_at: string
+          date: string
+          description: string
+          id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          description: string
+          id?: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          type?: string
+        }
+        Relationships: []
+      }
       monthly_hours_bank: {
         Row: {
           created_at: string
@@ -265,6 +289,7 @@ export type Database = {
           end_time: string
           id: string
           is_active: boolean | null
+          shift_index: number
           start_time: string
           user_id: string
         }
@@ -275,6 +300,7 @@ export type Database = {
           end_time: string
           id?: string
           is_active?: boolean | null
+          shift_index?: number
           start_time: string
           user_id: string
         }
@@ -285,6 +311,7 @@ export type Database = {
           end_time?: string
           id?: string
           is_active?: boolean | null
+          shift_index?: number
           start_time?: string
           user_id?: string
         }

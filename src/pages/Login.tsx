@@ -121,6 +121,9 @@ export default function Login() {
         <p className="text-center text-xs text-muted-foreground mt-6">
           © {new Date().getFullYear()} Juris Advocacia — Todos os direitos reservados
         </p>
+        <p className="text-center text-[10px] text-muted-foreground mt-1">
+          Desenvolvido por Eng. Guilherme dos Santos
+        </p>
       </motion.div>
     </div>
   );

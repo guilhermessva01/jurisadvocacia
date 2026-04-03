@@ -10,6 +10,7 @@ import { AdminHoursBank } from "@/components/admin/AdminHoursBank";
 import { AdminLateReport } from "@/components/admin/AdminLateReport";
 import { AdminSettings } from "@/components/admin/AdminSettings";
 import { AdminOverview } from "@/components/admin/AdminOverview";
+import { AdminHolidays } from "@/components/admin/AdminHolidays";
 
 const ADMIN_TABS = [
   { id: "overview", label: "Painel", icon: Activity },
@@ -17,6 +18,7 @@ const ADMIN_TABS = [
   { id: "records", label: "Registros", icon: ClipboardList },
   { id: "requests", label: "Solic.", icon: FileBarChart },
   { id: "hours", label: "Horas", icon: Clock },
+  { id: "holidays", label: "Feriados", icon: CalendarDays },
   { id: "late", label: "Atrasos", icon: CalendarDays },
   { id: "settings", label: "Config", icon: Settings },
 ];
@@ -91,9 +93,13 @@ export default function AdminDashboard() {
           {activeTab === "records" && <AdminTimeRecords />}
           {activeTab === "requests" && <AdminRequests />}
           {activeTab === "hours" && <AdminHoursBank />}
+          {activeTab === "holidays" && <AdminHolidays />}
           {activeTab === "late" && <AdminLateReport />}
           {activeTab === "settings" && <AdminSettings />}
         </div>
+        <footer className="text-center py-4">
+          <p className="text-[10px] text-muted-foreground/70">Desenvolvido por Eng. Guilherme dos Santos</p>
+        </footer>
       </main>
 
       {/* Mobile bottom navigation */}
