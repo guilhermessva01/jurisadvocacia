@@ -30,7 +30,7 @@ export function AdminOverview() {
     totalEmployees: 0, totalHoursWorked: 0, totalOvertime: 0,
     totalLateDays: 0, totalAbsentDays: 0, totalWorkDays: 0,
   });
-  const [todayHours, setTodayHours] = useState<{ user_id: string; full_name: string; hours: number }[]>([]);
+  const [todayHours, setTodayHours] = useState<{ user_id: string; full_name: string; totalSec: number }[]>([]);
 
   const fetchActive = async () => {
     const today = getBrasiliaISODate();
@@ -96,27 +96,33 @@ export function AdminOverview() {
 
     const hours: typeof todayHours = [];
     for (const [uid, recs] of Object.entries(userRecords)) {
-      const entrada = recs.find(r => r.type === "entrada");
-      const saidas = recs.filter(r => r.type === "saida");
-      const saida = saidas.length > 0 ? saidas[saidas.length - 1] : null;
+      // Pair each entrada with its corresponding saida
+      let totalSec = 0;
+      let pendingEntry: number | null = null;
 
-      if (entrada) {
-        const [eh, em, es] = entrada.time.split(":").map(Number);
-        let endSec: number;
-        if (saida) {
-          const [sh, sm, ss] = saida.time.split(":").map(Number);
-          endSec = sh * 3600 + (sm || 0) * 60 + (ss || 0);
-        } else {
-          const n = getBrasiliaDate();
-          endSec = n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
+      for (const r of recs) {
+        const [h, m, s] = r.time.split(":").map(Number);
+        const sec = h * 3600 + (m || 0) * 60 + (s || 0);
+        if (r.type === "entrada") {
+          pendingEntry = sec;
+        } else if (r.type === "saida" && pendingEntry !== null) {
+          totalSec += Math.max(0, sec - pendingEntry);
+          pendingEntry = null;
         }
-        const startSec = eh * 3600 + (em || 0) * 60 + (es || 0);
-        let workedSec = endSec - startSec;
+      }
 
+      // If still clocked in, count up to now
+      if (pendingEntry !== null) {
+        const n = getBrasiliaDate();
+        const nowSec = n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
+        totalSec += Math.max(0, nowSec - pendingEntry);
+      }
+
+      if (totalSec > 0) {
         hours.push({
           user_id: uid,
           full_name: profileMap[uid] || "—",
-          hours: Math.max(0, Math.round((workedSec / 3600) * 100) / 100),
+          totalSec,
         });
       }
     }
@@ -299,7 +305,7 @@ export function AdminOverview() {
               {todayHours.map((emp) => (
                 <div key={emp.user_id} className="flex items-center justify-between p-2.5 rounded-lg border border-border">
                   <span className="text-sm font-medium truncate">{emp.full_name}</span>
-                  <Badge variant="outline" className="font-mono text-xs">{emp.hours}h</Badge>
+                  <Badge variant="outline" className="font-mono text-xs">{Math.floor(emp.totalSec / 3600)}h {String(Math.floor((emp.totalSec % 3600) / 60)).padStart(2, "0")}min</Badge>
                 </div>
               ))}
             </div>
